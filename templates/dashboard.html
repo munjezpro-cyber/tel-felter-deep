@@ -168,7 +168,7 @@
             </div>
             <div class="flex" style="justify-content: space-between; align-items: center;">
                 <div>
-                    <span class="status-badge {{ 'status-active' if radar_status else 'status-inactive' }}">
+                    <span id="radar-status" class="status-badge {{ 'status-active' if radar_status else 'status-inactive' }}">
                         {{ '🟢 يعمل' if radar_status else '🔴 متوقف' }}
                     </span>
                     <span style="color: #94a3b8; font-size: 0.875rem; margin-right: 1rem;">
@@ -213,41 +213,45 @@
         <div class="card">
             <h2>📋 الحسابات المضافة</h2>
             {% if accounts %}
-            <table>
-                <tr>
-                    <th>رقم الهاتف</th>
-                    <th>مجموعة التنبيهات</th>
-                    <th>الحالة</th>
-                    <th>إجراءات</th>
-                </tr>
-                {% for acc in accounts %}
-                <tr>
-                    <td>{{ acc.phone }}</td>
-                    <td>{{ acc.alert_group or 'غير محدد' }}</td>
-                    <td>
-                        <span class="status-badge {{ 'status-active' if acc.enabled else 'status-inactive' }}">
-                            {{ 'نشط' if acc.enabled else 'متوقف' }}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="flex">
-                            <form action="/toggle-account/{{ acc.phone }}" method="POST" style="display: inline;">
-                                <button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                    {% if acc.enabled %}⏸️ إيقاف{% else %}▶️ تشغيل{% endif %}
-                                </button>
-                            </form>
-                            <a href="/delete-account/{{ acc.phone }}" class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
+            <table id="accounts-table">
+                <thead>
+                    <tr>
+                        <th>رقم الهاتف</th>
+                        <th>مجموعة التنبيهات</th>
+                        <th>الحالة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for acc in accounts %}
+                    <tr>
+                        <td>{{ acc.phone }}</td>
+                        <td>{{ acc.alert_group or 'غير محدد' }}</td>
+                        <td>
+                            <span class="status-badge {{ 'status-active' if acc.enabled else 'status-inactive' }}">
+                                {{ 'نشط' if acc.enabled else 'متوقف' }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex">
+                                <form action="/toggle-account/{{ acc.phone }}" method="POST" style="display: inline;">
+                                    <button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                        {% if acc.enabled %}⏸️ إيقاف{% else %}▶️ تشغيل{% endif %}
+                                    </button>
+                                </form>
+                                <a href="/delete-account/{{ acc.phone }}" class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
             </table>
             {% else %}
             <p style="text-align: center; color: #94a3b8;">لا توجد حسابات مضافة بعد.</p>
             {% endif %}
         </div>
 
-        <!-- الكلمات المفتاحية (في مربع نص واحد) -->
+        <!-- الكلمات المفتاحية -->
         <div class="card">
             <h2>🔑 الكلمات المفتاحية</h2>
             <p style="color: #94a3b8; font-size: 0.875rem;">أدخل كل كلمة في سطر منفصل</p>
@@ -273,10 +277,10 @@
             </form>
         </div>
 
-        <!-- سجل الأحداث (اختياري) -->
+        <!-- سجل الأحداث -->
         <div class="card">
             <h2>📜 آخر الأحداث</h2>
-            <div style="background-color: #0f172a; padding: 1rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; font-family: monospace; direction: ltr;">
+            <div class="logs-container" style="background-color: #0f172a; padding: 1rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; font-family: monospace; direction: ltr;">
                 {% for log in logs %}
                 <div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">{{ log }}</div>
                 {% else %}
@@ -287,7 +291,7 @@
     </div>
 
     <script>
-    // دالة لتحديث البيانات فقط (بدون إعادة تحميل الصفحة)
+    // دالة لتحديث البيانات (بدون إعادة تحميل الصفحة)
     async function refreshData() {
         try {
             const response = await fetch('/api/dashboard-data');
@@ -295,11 +299,10 @@
             const data = await response.json();
             
             // تحديث حالة الرادار
-            const radarStatus = document.getElementById('radar-status');
-            if (radarStatus) {
-                radarStatus.innerHTML = data.radar_status ? 
-                    '<span class="status-badge status-active">🟢 يعمل</span>' : 
-                    '<span class="status-badge status-inactive">🔴 متوقف</span>';
+            const radarSpan = document.getElementById('radar-status');
+            if (radarSpan) {
+                radarSpan.className = `status-badge ${data.radar_status ? 'status-active' : 'status-inactive'}`;
+                radarSpan.innerText = data.radar_status ? '🟢 يعمل' : '🔴 متوقف';
             }
             
             // تحديث الكلمات المفتاحية
@@ -309,8 +312,8 @@
             }
             
             // تحديث قائمة الحسابات
-            const accountsTable = document.querySelector('table');
-            if (accountsTable && data.accounts.length > 0) {
+            const tbody = document.querySelector('#accounts-table tbody');
+            if (tbody && data.accounts.length > 0) {
                 let html = '';
                 data.accounts.forEach(acc => {
                     html += `<tr>
@@ -333,17 +336,21 @@
                         </td>
                     </tr>`;
                 });
-                accountsTable.querySelector('tbody').innerHTML = html;
+                tbody.innerHTML = html;
             }
             
             // تحديث سجل الأحداث
             const logsDiv = document.querySelector('.logs-container');
-            if (logsDiv && data.logs.length > 0) {
-                let logsHtml = '';
-                data.logs.forEach(log => {
-                    logsHtml += `<div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">${log}</div>`;
-                });
-                logsDiv.innerHTML = logsHtml;
+            if (logsDiv) {
+                if (data.logs.length > 0) {
+                    let logsHtml = '';
+                    data.logs.forEach(log => {
+                        logsHtml += `<div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">${log}</div>`;
+                    });
+                    logsDiv.innerHTML = logsHtml;
+                } else {
+                    logsDiv.innerHTML = '<p style="color: #94a3b8;">لا توجد أحداث بعد.</p>';
+                }
             }
         } catch (e) {
             console.error('خطأ في تحديث البيانات:', e);
