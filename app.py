@@ -33,12 +33,16 @@ def run_async(coro):
     return future.result(timeout=30)
 
 # -------------------------------------------------------------------
-# 2. قاعدة البيانات SQLite
+# 2. قاعدة البيانات SQLite (مع دعم WAL وإعادة المحاولة)
 # -------------------------------------------------------------------
 DB_PATH = "radar.db"
 
 def get_db():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+    """فتح اتصال SQLite مع تفعيل WAL وإعداد مهلة للقفل"""
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")  # يسمح بالقراءة المتزامنة
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     conn = get_db()
@@ -121,87 +125,176 @@ def init_db():
 
 init_db()
 
-# دوال مساعدة لقاعدة البيانات
-def db_get_keywords():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT keyword FROM keywords")
-    keywords = [row[0] for row in c.fetchall()]
-    conn.close()
-    return keywords
-
-def db_get_accounts():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts WHERE enabled = 1")
-    accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in c.fetchall()]
-    conn.close()
-    return accounts
-
-def db_get_all_accounts():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts")
-    accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in c.fetchall()]
-    conn.close()
-    return accounts
-
-def db_add_account(phone, api_id, api_hash, alert_group):
-    conn = get_db()
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO accounts (phone, api_id, api_hash, alert_group) VALUES (?, ?, ?, ?)",
-                  (phone, api_id, api_hash, alert_group))
-        conn.commit()
-        conn.close()
-        return True
-    except sqlite3.IntegrityError:
-        conn.close()
-        return False
-
-def db_delete_account(phone):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("DELETE FROM accounts WHERE phone = ?", (phone,))
-    conn.commit()
-    conn.close()
-    # حذف ملف الجلسة المرتبط
-    session_file = f"session_{phone}.session"
-    if os.path.exists(session_file):
+# دوال مساعدة لقاعدة البيانات (مع إعادة محاولة تلقائية)
+def db_get_keywords(max_retries=3):
+    for attempt in range(max_retries):
         try:
-            os.remove(session_file)
-        except:
-            pass
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("SELECT keyword FROM keywords")
+            keywords = [row[0] for row in c.fetchall()]
+            conn.close()
+            return keywords
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_get_keywords: {e}")
+                return []
+        except Exception as e:
+            print(f"❌ خطأ غير متوقع في db_get_keywords: {e}")
+            return []
 
-def db_update_account_enabled(phone, enabled):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("UPDATE accounts SET enabled = ? WHERE phone = ?", (enabled, phone))
-    conn.commit()
-    conn.close()
+def db_get_accounts(max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts WHERE enabled = 1")
+            rows = c.fetchall()
+            accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in rows]
+            conn.close()
+            return accounts
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_get_accounts: {e}")
+                return []
 
-def db_get_setting(key, default=''):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT value FROM settings WHERE key = ?", (key,))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else default
+def db_get_all_accounts(max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts")
+            rows = c.fetchall()
+            accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in rows]
+            conn.close()
+            return accounts
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_get_all_accounts: {e}")
+                return []
 
-def db_set_setting(key, value):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
-    conn.commit()
-    conn.close()
+def db_add_account(phone, api_id, api_hash, alert_group, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("INSERT INTO accounts (phone, api_id, api_hash, alert_group) VALUES (?, ?, ?, ?)",
+                      (phone, api_id, api_hash, alert_group))
+            conn.commit()
+            conn.close()
+            return True
+        except sqlite3.IntegrityError:
+            conn.close()
+            return False
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_add_account: {e}")
+                return False
 
-def db_log_event(content):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("INSERT INTO logs (content) VALUES (?)", (content,))
-    conn.commit()
-    conn.close()
-    print(content)
+def db_delete_account(phone, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("DELETE FROM accounts WHERE phone = ?", (phone,))
+            conn.commit()
+            conn.close()
+            # حذف ملف الجلسة المرتبط
+            session_file = f"session_{phone}.session"
+            if os.path.exists(session_file):
+                try:
+                    os.remove(session_file)
+                except:
+                    pass
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_delete_account: {e}")
+                return
+
+def db_update_account_enabled(phone, enabled, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("UPDATE accounts SET enabled = ? WHERE phone = ?", (enabled, phone))
+            conn.commit()
+            conn.close()
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_update_account_enabled: {e}")
+                return
+
+def db_get_setting(key, default='', max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            row = c.fetchone()
+            conn.close()
+            return row[0] if row else default
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_get_setting: {e}")
+                return default
+
+def db_set_setting(key, value, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+            conn.commit()
+            conn.close()
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_set_setting: {e}")
+                return
+
+def db_log_event(content, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("INSERT INTO logs (content) VALUES (?)", (content,))
+            conn.commit()
+            conn.close()
+            print(content)
+            return
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            else:
+                print(f"⚠️ خطأ في db_log_event: {e}")
+                return
 
 # -------------------------------------------------------------------
 # 3. تخزين مؤقت للجلسات (أثناء تسجيل الدخول)
@@ -269,43 +362,56 @@ class RadarEngine:
 
             @client.on(events.NewMessage)
             async def handler(event):
-                if event.is_private or event.out:
-                    return
+                try:
+                    if event.is_private or event.out:
+                        return
 
-                # جلب الكلمات المفتاحية والإعدادات من قاعدة البيانات
-                keywords = db_get_keywords()
-                if not any(kw in event.raw_text.lower() for kw in keywords):
-                    return
-                # التحقق من حالة الذكاء الاصطناعي
-                ai_enabled = db_get_setting('ai_enabled') == '1'
-                api_key = db_get_setting('openrouter_key')
-                # إذا كان الذكاء مفعلاً، نقوم بالتصنيف
-                if ai_enabled and api_key:
-                    result = await classify_message(event.raw_text, api_key)
-                    if result.get('type') == 'marketer' and int(result.get('confidence', 0)) > 60:
-                        db_log_event(f"🚫 تجاهل رسالة معلن من {phone} (ثقة {result.get('confidence')}%)")
-                        return  # لا ترسل
+                    # جلب الكلمات المفتاحية والإعدادات من قاعدة البيانات
+                    keywords = db_get_keywords()
+                    if not any(kw in event.raw_text.lower() for kw in keywords):
+                        return
+                    
+                    # التحقق من حالة الذكاء الاصطناعي
+                    ai_enabled = db_get_setting('ai_enabled') == '1'
+                    api_key = db_get_setting('openrouter_key')
+                    
+                    # إذا كان الذكاء مفعلاً، نقوم بالتصنيف
+                    if ai_enabled and api_key:
+                        result = await classify_message(event.raw_text, api_key)
+                        if result.get('type') == 'marketer' and int(result.get('confidence', 0)) > 60:
+                            db_log_event(f"🚫 تجاهل رسالة معلن من {phone} (ثقة {result.get('confidence')}%)")
+                            return  # لا ترسل
+                        else:
+                            db_log_event(f"✅ رسالة طالب من {phone} (ثقة {result.get('confidence',0)}%)")
                     else:
-                        db_log_event(f"✅ رسالة طالب من {phone} (ثقة {result.get('confidence',0)}%)")
-                else:
-                    # الذكاء معطل، نرسل كل الرسائل
-                    db_log_event(f"📨 إرسال رسالة (ذكاء معطل) من {phone}")
-                # إرسال إلى مجموعة التنبيهات
-                if acc.get('alert_group'):
-                    try:
+                        # الذكاء معطل، نرسل كل الرسائل
+                        db_log_event(f"📨 إرسال رسالة (ذكاء معطل) من {phone}")
+                    
+                    # إرسال إلى مجموعة التنبيهات
+                    if acc.get('alert_group'):
                         dest = acc['alert_group']
-                        await client.forward_messages(dest, event.message)
-                        db_log_event(f"📤 تم إرسال رسالة من {phone}")
-                    except errors.ChatForwardsRestrictedError:
                         try:
-                            await client.send_message(dest, f"{event.raw_text}\n\n(تم إرسال نسخة)")
-                            db_log_event(f"📤 تم إرسال نسخة من {phone}")
+                            # محاولة إعادة التوجيه أولاً
+                            await client.forward_messages(dest, event.message)
+                            db_log_event(f"📤 تم إرسال رسالة من {phone}")
+                        except errors.FloodWaitError as e:
+                            db_log_event(f"⏳ Flood wait {e.seconds} ثانية من {phone}")
+                            await asyncio.sleep(e.seconds)
+                        except errors.ChatForwardsRestrictedError:
+                            try:
+                                await client.send_message(dest, f"{event.raw_text}\n\n(تم إرسال نسخة)")
+                                db_log_event(f"📤 تم إرسال نسخة من {phone}")
+                            except Exception as e:
+                                db_log_event(f"❌ فشل إرسال من {phone}: {e}")
                         except Exception as e:
                             db_log_event(f"❌ فشل إرسال من {phone}: {e}")
-                    except Exception as e:
-                        db_log_event(f"❌ فشل إرسال من {phone}: {e}")
+                except Exception as e:
+                    db_log_event(f"❌ خطأ في معالج الرسالة من {phone}: {e}")
 
             await client.run_until_disconnected()
+        except errors.FloodWaitError as e:
+            db_log_event(f"⏳ Flood wait {e.seconds} ثانية للحساب {phone}")
+            await asyncio.sleep(e.seconds)
         except Exception as e:
             print(f"❌ خطأ في حساب {phone}: {e}")
         finally:
@@ -514,21 +620,14 @@ def toggle_account(phone):
     session_id = session.get('session_id')
     if not session_id or session_id not in active_users or active_users[session_id]['status'] != 'logged_in':
         return redirect(url_for('index'))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT enabled FROM accounts WHERE phone = ?", (phone,))
-    enabled = c.fetchone()[0]
-    c.execute("UPDATE accounts SET enabled = ? WHERE phone = ?", (not enabled, phone))
-    conn.commit()
-    conn.close()
-    if enabled:
-        # كان مفعلاً، نوقفه
-        if phone in radar.clients:
-            asyncio.run_coroutine_threadsafe(radar.clients[phone].disconnect(), loop)
-            del radar.clients[phone]
-        db_log_event(f"⏸️ تم إيقاف حساب {phone}")
-    else:
-        # نفعله
+    
+    # الحصول على الحالة الحالية
+    enabled = db_get_setting(f"account_enabled_{phone}", '1') == '1'
+    new_enabled = not enabled
+    db_set_setting(f"account_enabled_{phone}", '1' if new_enabled else '0')
+    
+    if new_enabled:
+        # تشغيل الحساب
         conn = get_db()
         c = conn.cursor()
         c.execute("SELECT api_id, api_hash, alert_group FROM accounts WHERE phone = ?", (phone,))
@@ -542,6 +641,13 @@ def toggle_account(phone):
                 'alert_group': row[2]
             }), loop)
             db_log_event(f"▶️ تم تشغيل حساب {phone}")
+    else:
+        # إيقاف الحساب
+        if phone in radar.clients:
+            asyncio.run_coroutine_threadsafe(radar.clients[phone].disconnect(), loop)
+            del radar.clients[phone]
+        db_log_event(f"⏸️ تم إيقاف حساب {phone}")
+    
     flash('تم تغيير حالة الحساب', 'success')
     return redirect(url_for('dashboard'))
 
