@@ -3,64 +3,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم</title>
+    <title>لوحة التحكم - رادار تيليجرام</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 1rem; }
-        .container { max-width: 1200px; margin: auto; }
-        .card { background: #1e293b; padding: 1rem; border-radius: 1rem; margin-bottom: 1rem; }
-        h2 { color: #2dd4bf; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: right; border-bottom: 1px solid #334155; }
-        th { background-color: #2dd4bf; color: #0f172a; }
-        input, textarea { width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #334155; border-radius: 0.5rem; background-color: #0f172a; color: #f8fafc; }
-        button { background-color: #2dd4bf; color: #0f172a; font-weight: bold; padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; cursor: pointer; }
-        a { color: #fca5a5; text-decoration: none; }
-        .flex { display: flex; gap: 0.5rem; }
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 1rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .card {
+            background: #1e293b;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+        }
+        h2 {
+            color: #2dd4bf;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 0.5rem;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        .status-active {
+            background-color: #14532d;
+            color: #86efac;
+        }
+        .status-inactive {
+            background-color: #7f1d1d;
+            color: #fca5a5;
+        }
+        button, .btn {
+            background-color: #2dd4bf;
+            color: #0f172a;
+            font-weight: bold;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 0.875rem;
+        }
+        button:hover {
+            background-color: #14b8a6;
+        }
+        button.danger {
+            background-color: #ef4444;
+            color: white;
+        }
+        button.danger:hover {
+            background-color: #dc2626;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 0.75rem;
+            margin: 0.5rem 0 1rem 0;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-size: 0.875rem;
+        }
+        textarea {
+            font-family: monospace;
+            direction: ltr;
+            min-height: 200px;
+        }
+        label {
+            display: block;
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-bottom: 0.25rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background-color: #2dd4bf;
+            color: #0f172a;
+            padding: 0.75rem;
+            text-align: right;
+        }
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #334155;
+        }
+        .flex {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+        .checkbox-group input {
+            width: auto;
+            margin: 0;
+        }
+        .alert {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .alert-success {
+            background-color: #14532d;
+            color: #86efac;
+        }
+        .alert-danger {
+            background-color: #7f1d1d;
+            color: #fca5a5;
+        }
+        .alert-info {
+            background-color: #1e3a8a;
+            color: #93c5fd;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- رسائل الفلاش -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <!-- حالة الرادار -->
         <div class="card">
-            <h2>حالة الرادار</h2>
-            <p>الرادار يعمل في الخلفية على جميع الحسابات المسجلة.</p>
-            <a href="/logout">تسجيل الخروج</a>
+            <div class="flex-between">
+                <h2>🚀 حالة الرادار</h2>
+                <a href="/logout" class="btn" style="background-color: #475569; color: white;">تسجيل الخروج</a>
+            </div>
+            <div class="flex" style="justify-content: space-between; align-items: center;">
+                <div>
+                    <span class="status-badge {{ 'status-active' if radar_status else 'status-inactive' }}">
+                        {{ '🟢 يعمل' if radar_status else '🔴 متوقف' }}
+                    </span>
+                    <span style="color: #94a3b8; font-size: 0.875rem; margin-right: 1rem;">
+                        الرادار يعمل في الخلفية على جميع الحسابات المسجلة.
+                    </span>
+                </div>
+                <form action="/toggle-radar" method="POST" style="display: inline;">
+                    <button type="submit" class="{{ 'danger' if radar_status else '' }}" style="min-width: 120px;">
+                        {% if radar_status %}⏹️ إيقاف الرادار{% else %}▶️ تشغيل الرادار{% endif %}
+                    </button>
+                </form>
+            </div>
         </div>
 
+        <!-- إضافة حساب جديد -->
         <div class="card">
-            <h2>الحسابات المضافة</h2>
+            <h2>➕ إضافة حساب جديد</h2>
+            <form action="/add-account" method="POST">
+                <div class="grid-2">
+                    <div>
+                        <label>رقم الهاتف (مع مفتاح الدولة)</label>
+                        <input type="text" name="phone" placeholder="+967735361693" required>
+                    </div>
+                    <div>
+                        <label>API ID</label>
+                        <input type="text" name="api_id" placeholder="35246108" required>
+                    </div>
+                    <div>
+                        <label>API Hash</label>
+                        <input type="text" name="api_hash" placeholder="abb021173565530ee09993bcb29bfb5c" required>
+                    </div>
+                    <div>
+                        <label>مجموعة التنبيهات (اختياري)</label>
+                        <input type="text" name="alert_group" placeholder="https://t.me/...">
+                    </div>
+                </div>
+                <button type="submit">إرسال رمز التحقق</button>
+            </form>
+        </div>
+
+        <!-- الحسابات المضافة -->
+        <div class="card">
+            <h2>📋 الحسابات المضافة</h2>
+            {% if accounts %}
             <table>
-                <tr><th>رقم الهاتف</th><th>مجموعة التنبيهات</th><th>إجراءات</th></tr>
+                <tr>
+                    <th>رقم الهاتف</th>
+                    <th>مجموعة التنبيهات</th>
+                    <th>الحالة</th>
+                    <th>إجراءات</th>
+                </tr>
                 {% for acc in accounts %}
                 <tr>
                     <td>{{ acc.phone }}</td>
                     <td>{{ acc.alert_group or 'غير محدد' }}</td>
-                    <td><a href="/delete-account/{{ acc.phone }}" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td>
+                    <td>
+                        <span class="status-badge {{ 'status-active' if acc.enabled else 'status-inactive' }}">
+                            {{ 'نشط' if acc.enabled else 'متوقف' }}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="flex">
+                            <form action="/toggle-account/{{ acc.phone }}" method="POST" style="display: inline;">
+                                <button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                    {% if acc.enabled %}⏸️ إيقاف{% else %}▶️ تشغيل{% endif %}
+                                </button>
+                            </form>
+                            <a href="/delete-account/{{ acc.phone }}" class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
             </table>
+            {% else %}
+            <p style="text-align: center; color: #94a3b8;">لا توجد حسابات مضافة بعد.</p>
+            {% endif %}
         </div>
 
+        <!-- الكلمات المفتاحية (في مربع نص واحد) -->
         <div class="card">
-            <h2>الكلمات المفتاحية</h2>
-            <form action="/add-keyword" method="POST" style="display:flex; gap:0.5rem;">
-                <input type="text" name="keyword" placeholder="كلمة جديدة" style="flex-grow:1;" required>
-                <button type="submit">إضافة</button>
+            <h2>🔑 الكلمات المفتاحية</h2>
+            <p style="color: #94a3b8; font-size: 0.875rem;">أدخل كل كلمة في سطر منفصل</p>
+            <form action="/save-keywords" method="POST">
+                <textarea name="keywords">{{ keywords_text }}</textarea>
+                <button type="submit">💾 حفظ الكلمات</button>
             </form>
-            <ul>
-                {% for kw in keywords %}
-                <li>{{ kw }} <a href="/delete-keyword/{{ kw }}" style="margin-right:1rem;">❌</a></li>
-                {% endfor %}
-            </ul>
         </div>
 
+        <!-- إعدادات الذكاء الاصطناعي -->
         <div class="card">
-            <h2>إعدادات الذكاء الاصطناعي</h2>
+            <h2>🤖 إعدادات الذكاء الاصطناعي</h2>
             <form action="/save-ai-settings" method="POST">
-                <input type="text" name="openrouter_key" placeholder="مفتاح OpenRouter" value="{{ openrouter_key }}">
-                <label><input type="checkbox" name="ai_enabled" {% if ai_enabled == '1' %}checked{% endif %}> تفعيل التصنيف الذكي</label>
-                <button type="submit">حفظ</button>
+                <label>مفتاح OpenRouter API</label>
+                <input type="text" name="openrouter_key" value="{{ openrouter_key }}" placeholder="sk-or-v1-...">
+                
+                <div class="checkbox-group">
+                    <input type="checkbox" name="ai_enabled" id="ai_enabled" {% if ai_enabled %}checked{% endif %}>
+                    <label for="ai_enabled" style="display: inline; margin: 0;">تفعيل التصنيف الذكي (يمنع رسائل المعلنين)</label>
+                </div>
+                
+                <button type="submit">💾 حفظ الإعدادات</button>
             </form>
+        </div>
+
+        <!-- سجل الأحداث (اختياري) -->
+        <div class="card">
+            <h2>📜 آخر الأحداث</h2>
+            <div style="background-color: #0f172a; padding: 1rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; font-family: monospace; direction: ltr;">
+                {% for log in logs %}
+                <div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">{{ log }}</div>
+                {% else %}
+                <p style="color: #94a3b8;">لا توجد أحداث بعد.</p>
+                {% endfor %}
+            </div>
         </div>
     </div>
+
+    <script>
+        // تحديث الصفحة كل 10 ثواني (اختياري)
+        setTimeout(() => {
+            location.reload();
+        }, 10000);
+    </script>
 </body>
 </html>
