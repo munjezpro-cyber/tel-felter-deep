@@ -1,0 +1,4 @@
+Flask==3.0.0
+Telethon==1.37.0
+aiohttp==3.9.1
+gunicorn==21.2.0
