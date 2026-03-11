@@ -16,7 +16,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>إضافة حساب تيليجرام</h2>
+        <h2>تسجيل الدخول إلى الرادار</h2>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
                 <div class="alert alert-{{ category }}">{{ message }}</div>
@@ -26,7 +26,7 @@
             <input type="text" name="api_id" placeholder="API ID" required>
             <input type="text" name="api_hash" placeholder="API Hash" required>
             <input type="text" name="phone" placeholder="رقم الهاتف (مثال: +9677...)" required>
-            <input type="text" name="alert_group" placeholder="معرف مجموعة التنبيهات (اختياري)">
+            <input type="text" name="alert_group" placeholder="مجموعة التنبيهات (اختياري)">
             <button type="submit">إرسال رمز التحقق</button>
         </form>
     </div>
