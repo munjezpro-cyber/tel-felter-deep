@@ -5,162 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة التحكم - رادار تيليجرام</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            margin: 0;
-            padding: 1rem;
-        }
-        .container {
-            max-width: 1200px;
-            margin: auto;
-        }
-        .card {
-            background: #1e293b;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);
-            border: 1px solid #334155;
-        }
-        h2 {
-            color: #2dd4bf;
-            margin-top: 0;
-            margin-bottom: 1.5rem;
-            font-size: 1.5rem;
-            border-bottom: 2px solid #334155;
-            padding-bottom: 0.5rem;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-left: 0.5rem;
-        }
-        .status-active {
-            background-color: #14532d;
-            color: #86efac;
-        }
-        .status-inactive {
-            background-color: #7f1d1d;
-            color: #fca5a5;
-        }
-        button, .btn {
-            background-color: #2dd4bf;
-            color: #0f172a;
-            font-weight: bold;
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            font-size: 0.875rem;
-        }
-        button:hover {
-            background-color: #14b8a6;
-        }
-        button.danger {
-            background-color: #ef4444;
-            color: white;
-        }
-        button.danger:hover {
-            background-color: #dc2626;
-        }
-        input, textarea, select {
-            width: 100%;
-            padding: 0.75rem;
-            margin: 0.5rem 0 1rem 0;
-            border: 1px solid #334155;
-            border-radius: 0.5rem;
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-size: 0.875rem;
-        }
-        textarea {
-            font-family: monospace;
-            direction: ltr;
-            min-height: 200px;
-        }
-        label {
-            display: block;
-            font-size: 0.875rem;
-            color: #94a3b8;
-            margin-bottom: 0.25rem;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background-color: #2dd4bf;
-            color: #0f172a;
-            padding: 0.75rem;
-            text-align: right;
-        }
-        td {
-            padding: 0.75rem;
-            border-bottom: 1px solid #334155;
-        }
-        .flex {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-        }
-        .flex-between {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: 1rem 0;
-        }
-        .checkbox-group input {
-            width: auto;
-            margin: 0;
-        }
-        .alert {
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .alert-success {
-            background-color: #14532d;
-            color: #86efac;
-        }
-        .alert-danger {
-            background-color: #7f1d1d;
-            color: #fca5a5;
-        }
-        .alert-info {
-            background-color: #1e3a8a;
-            color: #93c5fd;
-        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; margin: 0; padding: 1rem; }
+        .container { max-width: 1200px; margin: auto; }
+        .card { background: #1e293b; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5); border: 1px solid #334155; }
+        h2 { color: #2dd4bf; margin-top: 0; margin-bottom: 1.5rem; font-size: 1.5rem; border-bottom: 2px solid #334155; padding-bottom: 0.5rem; }
+        .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; margin-left: 0.5rem; }
+        .status-active { background-color: #14532d; color: #86efac; }
+        .status-inactive { background-color: #7f1d1d; color: #fca5a5; }
+        button, .btn { background-color: #2dd4bf; color: #0f172a; font-weight: bold; padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; cursor: pointer; transition: background-color 0.2s; font-size: 0.875rem; }
+        button:hover { background-color: #14b8a6; }
+        button.danger { background-color: #ef4444; color: white; }
+        button.danger:hover { background-color: #dc2626; }
+        input, textarea, select { width: 100%; padding: 0.75rem; margin: 0.5rem 0 1rem 0; border: 1px solid #334155; border-radius: 0.5rem; background-color: #0f172a; color: #f8fafc; font-size: 0.875rem; }
+        textarea { font-family: monospace; direction: ltr; min-height: 200px; }
+        label { display: block; font-size: 0.875rem; color: #94a3b8; margin-bottom: 0.25rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background-color: #2dd4bf; color: #0f172a; padding: 0.75rem; text-align: right; }
+        td { padding: 0.75rem; border-bottom: 1px solid #334155; }
+        .flex { display: flex; gap: 0.5rem; align-items: center; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0; }
+        .checkbox-group input { width: auto; margin: 0; }
+        .alert { padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+        .alert-success { background-color: #14532d; color: #86efac; }
+        .alert-danger { background-color: #7f1d1d; color: #fca5a5; }
+        .logs-container { background-color: #0f172a; padding: 1rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; font-family: monospace; direction: ltr; }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- رسائل الفلاش -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
                 <div class="alert alert-{{ category }}">{{ message }}</div>
             {% endfor %}
         {% endwith %}
 
-        <!-- حالة الرادار -->
         <div class="card">
             <div class="flex-between">
                 <h2>🚀 حالة الرادار</h2>
@@ -183,185 +64,103 @@
             </div>
         </div>
 
-        <!-- إضافة حساب جديد -->
         <div class="card">
             <h2>➕ إضافة حساب جديد</h2>
             <form action="/add-account" method="POST">
                 <div class="grid-2">
-                    <div>
-                        <label>رقم الهاتف (مع مفتاح الدولة)</label>
-                        <input type="text" name="phone" placeholder="+967735361693" required>
-                    </div>
-                    <div>
-                        <label>API ID</label>
-                        <input type="text" name="api_id" placeholder="35246108" required>
-                    </div>
-                    <div>
-                        <label>API Hash</label>
-                        <input type="text" name="api_hash" placeholder="abb021173565530ee09993bcb29bfb5c" required>
-                    </div>
-                    <div>
-                        <label>مجموعة التنبيهات (اختياري)</label>
-                        <input type="text" name="alert_group" placeholder="https://t.me/...">
-                    </div>
+                    <div><label>رقم الهاتف (مع مفتاح الدولة)</label><input type="text" name="phone" placeholder="+9677..." required></div>
+                    <div><label>API ID</label><input type="text" name="api_id" placeholder="35246108" required></div>
+                    <div><label>API Hash</label><input type="text" name="api_hash" placeholder="..." required></div>
+                    <div><label>مجموعة التنبيهات (اختياري)</label><input type="text" name="alert_group" placeholder="https://t.me/..."></div>
                 </div>
                 <button type="submit">إرسال رمز التحقق</button>
             </form>
         </div>
 
-        <!-- الحسابات المضافة -->
         <div class="card">
             <h2>📋 الحسابات المضافة</h2>
             {% if accounts %}
             <table id="accounts-table">
-                <thead>
-                    <tr>
-                        <th>رقم الهاتف</th>
-                        <th>مجموعة التنبيهات</th>
-                        <th>الحالة</th>
-                        <th>إجراءات</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>رقم الهاتف</th><th>مجموعة التنبيهات</th><th>الحالة</th><th>إجراءات</th></tr></thead>
                 <tbody>
                     {% for acc in accounts %}
                     <tr>
                         <td>{{ acc.phone }}</td>
                         <td>{{ acc.alert_group or 'غير محدد' }}</td>
-                        <td>
-                            <span class="status-badge {{ 'status-active' if acc.enabled else 'status-inactive' }}">
-                                {{ 'نشط' if acc.enabled else 'متوقف' }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="flex">
-                                <form action="/toggle-account/{{ acc.phone }}" method="POST" style="display: inline;">
-                                    <button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                        {% if acc.enabled %}⏸️ إيقاف{% else %}▶️ تشغيل{% endif %}
-                                    </button>
-                                </form>
-                                <a href="/delete-account/{{ acc.phone }}" class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
-                            </div>
-                        </td>
+                        <td><span class="status-badge {{ 'status-active' if acc.enabled else 'status-inactive' }}">{{ 'نشط' if acc.enabled else 'متوقف' }}</span></td>
+                        <td><div class="flex">
+                            <form action="/toggle-account/{{ acc.phone }}" method="POST"><button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem;">{% if acc.enabled %}⏸️ إيقاف{% else %}▶️ تشغيل{% endif %}</button></form>
+                            <a href="/delete-account/{{ acc.phone }}" class="btn danger" style="padding: 0.25rem 0.5rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
+                        </div></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
-            {% else %}
-            <p style="text-align: center; color: #94a3b8;">لا توجد حسابات مضافة بعد.</p>
-            {% endif %}
+            {% else %}<p style="color:#94a3b8; text-align:center;">لا توجد حسابات مضافة بعد.</p>{% endif %}
         </div>
 
-        <!-- الكلمات المفتاحية -->
         <div class="card">
             <h2>🔑 الكلمات المفتاحية</h2>
-            <p style="color: #94a3b8; font-size: 0.875rem;">أدخل كل كلمة في سطر منفصل</p>
+            <p style="color: #94a3b8;">أدخل كل كلمة في سطر منفصل</p>
             <form action="/save-keywords" method="POST">
                 <textarea name="keywords">{{ keywords_text }}</textarea>
                 <button type="submit">💾 حفظ الكلمات</button>
             </form>
         </div>
 
-        <!-- إعدادات الذكاء الاصطناعي -->
         <div class="card">
             <h2>🤖 إعدادات الذكاء الاصطناعي</h2>
             <form action="/save-ai-settings" method="POST">
                 <label>مفتاح OpenRouter API</label>
                 <input type="text" name="openrouter_key" value="{{ openrouter_key }}" placeholder="sk-or-v1-...">
-                
                 <div class="checkbox-group">
                     <input type="checkbox" name="ai_enabled" id="ai_enabled" {% if ai_enabled %}checked{% endif %}>
-                    <label for="ai_enabled" style="display: inline; margin: 0;">تفعيل التصنيف الذكي (يمنع رسائل المعلنين)</label>
+                    <label for="ai_enabled">تفعيل التصنيف الذكي (يمنع رسائل المعلنين)</label>
                 </div>
-                
                 <button type="submit">💾 حفظ الإعدادات</button>
             </form>
         </div>
 
-        <!-- سجل الأحداث -->
         <div class="card">
             <h2>📜 آخر الأحداث</h2>
-            <div class="logs-container" style="background-color: #0f172a; padding: 1rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto; font-family: monospace; direction: ltr;">
-                {% for log in logs %}
-                <div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">{{ log }}</div>
-                {% else %}
-                <p style="color: #94a3b8;">لا توجد أحداث بعد.</p>
-                {% endfor %}
+            <div class="logs-container" id="logs-container">
+                {% for log in logs %}<div style="color:#86efac; border-bottom:1px solid #334155; padding:0.25rem 0;">{{ log }}</div>{% else %}<p style="color:#94a3b8;">لا توجد أحداث بعد.</p>{% endfor %}
             </div>
         </div>
     </div>
-
     <script>
-    // دالة لتحديث البيانات (بدون إعادة تحميل الصفحة)
-    async function refreshData() {
-        try {
-            const response = await fetch('/api/dashboard-data');
-            if (!response.ok) throw new Error('فشل التحميل');
-            const data = await response.json();
-            
-            // تحديث حالة الرادار
-            const radarSpan = document.getElementById('radar-status');
-            if (radarSpan) {
-                radarSpan.className = `status-badge ${data.radar_status ? 'status-active' : 'status-inactive'}`;
-                radarSpan.innerText = data.radar_status ? '🟢 يعمل' : '🔴 متوقف';
-            }
-            
-            // تحديث الكلمات المفتاحية
-            const keywordsTextarea = document.querySelector('textarea[name="keywords"]');
-            if (keywordsTextarea) {
-                keywordsTextarea.value = data.keywords_text;
-            }
-            
-            // تحديث قائمة الحسابات
-            const tbody = document.querySelector('#accounts-table tbody');
-            if (tbody && data.accounts.length > 0) {
-                let html = '';
-                data.accounts.forEach(acc => {
-                    html += `<tr>
-                        <td>${acc.phone}</td>
-                        <td>${acc.alert_group || 'غير محدد'}</td>
-                        <td>
-                            <span class="status-badge ${acc.enabled ? 'status-active' : 'status-inactive'}">
-                                ${acc.enabled ? 'نشط' : 'متوقف'}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="flex">
-                                <form action="/toggle-account/${acc.phone}" method="POST" style="display: inline;">
-                                    <button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                        ${acc.enabled ? '⏸️ إيقاف' : '▶️ تشغيل'}
-                                    </button>
-                                </form>
-                                <a href="/delete-account/${acc.phone}" class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
-                            </div>
-                        </td>
-                    </tr>`;
-                });
-                tbody.innerHTML = html;
-            }
-            
-            // تحديث سجل الأحداث
-            const logsDiv = document.querySelector('.logs-container');
-            if (logsDiv) {
-                if (data.logs.length > 0) {
-                    let logsHtml = '';
-                    data.logs.forEach(log => {
-                        logsHtml += `<div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">${log}</div>`;
-                    });
-                    logsDiv.innerHTML = logsHtml;
-                } else {
-                    logsDiv.innerHTML = '<p style="color: #94a3b8;">لا توجد أحداث بعد.</p>';
+        async function refreshData() {
+            try {
+                const response = await fetch('/api/dashboard-data');
+                if (!response.ok) throw new Error('فشل التحميل');
+                const data = await response.json();
+                const radarSpan = document.getElementById('radar-status');
+                if (radarSpan) {
+                    radarSpan.className = `status-badge ${data.radar_status ? 'status-active' : 'status-inactive'}`;
+                    radarSpan.innerText = data.radar_status ? '🟢 يعمل' : '🔴 متوقف';
                 }
-            }
-        } catch (e) {
-            console.error('خطأ في تحديث البيانات:', e);
+                const keywordsTextarea = document.querySelector('textarea[name="keywords"]');
+                if (keywordsTextarea) keywordsTextarea.value = data.keywords_text;
+                const tbody = document.querySelector('#accounts-table tbody');
+                if (tbody && data.accounts.length > 0) {
+                    let html = '';
+                    data.accounts.forEach(acc => {
+                        html += `<tr><td>${acc.phone}</td><td>${acc.alert_group||'غير محدد'}</td><td><span class="status-badge ${acc.enabled?'status-active':'status-inactive'}">${acc.enabled?'نشط':'متوقف'}</span></td><td><div class="flex"><form action="/toggle-account/${acc.phone}" method="POST"><button type="submit" style="background-color:#475569; padding:0.25rem 0.5rem;">${acc.enabled?'⏸️ إيقاف':'▶️ تشغيل'}</button></form><a href="/delete-account/${acc.phone}" class="btn danger" style="padding:0.25rem 0.5rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a></div></td></tr>`;
+                    });
+                    tbody.innerHTML = html;
+                }
+                const logsDiv = document.getElementById('logs-container');
+                if (logsDiv) {
+                    if (data.logs.length > 0) {
+                        let logsHtml = '';
+                        data.logs.forEach(log => { logsHtml += `<div style="color:#86efac; border-bottom:1px solid #334155; padding:0.25rem 0;">${log}</div>`; });
+                        logsDiv.innerHTML = logsHtml;
+                    } else logsDiv.innerHTML = '<p style="color:#94a3b8;">لا توجد أحداث بعد.</p>';
+                }
+            } catch (e) { console.error('خطأ في تحديث البيانات:', e); }
         }
-    }
-
-    // تحديث البيانات كل 10 ثوانٍ
-    setInterval(refreshData, 10000);
-    
-    // تحديث فوري عند تحميل الصفحة
-    refreshData();
+        setInterval(refreshData, 10000);
+        refreshData();
     </script>
 </body>
 </html>
