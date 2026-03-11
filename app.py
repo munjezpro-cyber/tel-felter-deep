@@ -14,14 +14,32 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "simple-secret-key-change-this")
 
 # -------------------------------------------------------------------
-# 1. قاعدة البيانات (SQLite بسيطة)
+# 1. حلقة الأحداث الموحدة (asyncio)
+# -------------------------------------------------------------------
+# إنشاء حلقة في خيط منفصل لتشغيل Telethon
+loop = asyncio.new_event_loop()
+
+def start_loop():
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+thread = threading.Thread(target=start_loop, daemon=True)
+thread.start()
+
+# دالة لتشغيل async من Flask (بدون إنشاء حلقة جديدة)
+def run_async(coro):
+    """تشغيل async في الحلقة الموحدة"""
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result(timeout=30)
+
+# -------------------------------------------------------------------
+# 2. قاعدة البيانات (SQLite)
 # -------------------------------------------------------------------
 DB_PATH = "radar.db"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    # جدول الحسابات
     c.execute('''
         CREATE TABLE IF NOT EXISTS accounts (
             phone TEXT PRIMARY KEY,
@@ -32,14 +50,12 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # جدول الكلمات المفتاحية
     c.execute('''
         CREATE TABLE IF NOT EXISTS keywords (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             keyword TEXT UNIQUE NOT NULL
         )
     ''')
-    # جدول الإعدادات
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
@@ -47,119 +63,36 @@ def init_db():
         )
     ''')
     
-    # -----------------------------------------------------------------
-    # إدراج الكلمات المفتاحية الافتراضية (القائمة الضخمة)
-    # -----------------------------------------------------------------
+    # إدراج الكلمات المفتاحية الافتراضية (يمكنك وضع القائمة الكبيرة هنا)
     c.execute("SELECT COUNT(*) FROM keywords")
     if c.fetchone()[0] == 0:
         default_keywords = [
-            # طلبات المساعدة العامة
-            'مساعدة', 'ساعدوني', 'ساعدني', 'أبي أحد', 'أبي حد', 'أبي مساعدة', 'محتاج', 'محتاجة', 'ضروري', 'مستعجل', 'أرجوكم', 'لو سمحتم',
-            'الرجاء المساعدة', 'تحتاج مساعدة', 'نحتاج مساعدة', 'يحتاج مساعدة', 'تحتاج مساعدة',
-            
-            # الواجبات والتكاليف
-            'واجب', 'واجبات', 'تكليف', 'تكاليف', 'حل', 'يحل', 'اسايمنت', 'assignment', 'homework', 'تكليفات', 'واجبي', 'واجباتي', 'أسايمنت',
-            'حل واجب', 'حل الواجب', 'حل التكليف', 'حل التكاليف', 'حل أسايمنت', 'حل assignment',
-            
-            # البحوث والتقارير
-            'بحث', 'بحوث', 'تقرير', 'تقارير', 'ريبورت', 'report', 'research', 'بحثي', 'تقريري', 'دراسة', 'دراسة حالة', 'case study', 'رسالة', 'رسائل',
-            'إعداد بحث', 'كتابة بحث', 'عمل بحث', 'عمل تقرير', 'إعداد تقرير', 'كتابة تقرير', 'تحضير بحث', 'تحضير تقرير',
-            
-            # المشاريع
-            'مشروع', 'مشاريع', 'بروجكت', 'project', 'بروجيكت', 'مشروع تخرج', 'مشاريع تخرج', 'مشروعي', 'بروجكتي', 'خطة مشروع', 'مشروع نهائي',
-            'مشروع تخرجي', 'مشروع الجامعة', 'مشروع الكلية', 'مشروع التخرج', 'مشاريع التخرج',
-            
-            # العروض التقديمية والتصاميم
-            'برزنتيشن', 'presentation', 'بوربوينت', 'powerpoint', 'عرض', 'عروض', 'تصميم', 'تصاميم', 'بوستر', 'poster', 'برشور', 'brochure', 'انفوجرافيك', 'infographic', 'خريطة ذهنية', 'mind map',
-            'عرض تقديمي', 'عروض تقديمية', 'تصميم بوربوينت', 'تصميم عرض', 'تصميم بوستر', 'تصميم برشور', 'تصميم انفوجرافيك',
-            
-            # الفيديوهات والوسائط
-            'فيديو', 'فيديوهات', 'مونتاج', 'مقطع', 'تصوير', 'تحرير', 'انميشن', 'animation', 'موشن جرافيك', 'motion graphic',
-            'مونتاج فيديو', 'تحرير فيديو', 'تصميم فيديو', 'تصوير فيديو', 'مقاطع فيديو',
-            
-            # الاختبارات
-            'اختبار', 'اختبارات', 'كويز', 'كويزات', 'فاينل', 'ميد', 'امتحان', 'امتحانات', 'اختبار نهائي', 'اختبار منتصف', 'كويزات',
-            'اختبارات نهائية', 'اختبارات منتصف', 'امتحان نهائي', 'امتحان منتصف', 'حل اختبار', 'حل امتحان', 'حل كويز',
-            
-            # الشرح والمساعدة
-            'شرح', 'يشرح', 'درس', 'دروس', 'ملخص', 'ملخصات', 'مذكرة', 'مذكرات', 'أساسيات', 'تمارين', 'تدريبات', 'فهم', 'استيعاب', 'تبسيط',
-            'شرح درس', 'شرح مادة', 'شرح موضوع', 'دروس خصوصية', 'دروس تقوية', 'ملخصات مواد', 'تلخيص مادة', 'تلخيص كتاب',
-            
-            # التخصصات
-            'رياضيات', 'فيزياء', 'كيمياء', 'أحياء', 'إنجليزي', 'عربي', 'تاريخ', 'جغرافيا', 'فلسفة', 'منطق', 'قانون', 'محاسبة', 'اقتصاد', 'إدارة', 'تسويق', 'برمجة', 'علوم حاسب', 'هندسة', 'طب', 'صيدلة', 'تمريض', 'حقوق', 'علوم سياسية', 'إعلام',
-            'رياضيات بحتة', 'رياضيات تطبيقية', 'فيزياء عامة', 'فيزياء نووية', 'كيمياء عضوية', 'كيمياء تحليلية', 'أحياء دقيقة', 'أحياء جزيئية',
-            
-            # طلب مدرس خصوصي
-            'دكتور خصوصي', 'مدرس خصوصي', 'معلم خصوصي', 'مدرسة خصوصية', 'دروس خصوصية', 'تدريس خصوصي', 'شرح خصوصي', 'يشرح خصوصي', 'معيد', 'متخصص',
-            'أستاذ خصوصي', 'مدرس خصوصي رياضيات', 'مدرس خصوصي فيزياء', 'مدرس خصوصي كيمياء', 'مدرس خصوصي إنجليزي',
-            
-            # استفسارات عن موارد
-            'تعرفون أحد', 'تعرفون حد', 'من يعرف', 'من تعرف', 'أحد يعرف', 'حد يعرف', 'وين ألقى', 'كيف ألقى', 'كيف أحصل', 'مصدر', 'مرجع',
-            'عندكم فكرة', 'أحد عنده خبرة', 'من جرب', 'تجربة', 'نصيحة', 'توجيه', 'إرشاد',
-            
-            # خدمات متنوعة
-            'ترجمة', 'تلخيص', 'تدقيق', 'صياغة', 'كتابة', 'إعداد', 'تنفيذ', 'استشارة', 'توجيه', 'إرشاد', 'مراجعة', 'تصحيح',
-            'ترجمة نص', 'تلخيص كتاب', 'تدقيق لغوي', 'صياغة قانونية', 'كتابة مقال', 'إعداد خطة', 'تنفيذ مشروع',
-            
-            # كلمات إضافية
-            'مراجعة', 'ليالي الامتحان', 'أسئلة', 'إجابات', 'نماذج', 'تجميعات', 'شروحات', 'تبسيط', 'حفظ', 'تذكر',
-            'مراجعة ليلة الامتحان', 'أسئلة سنوات سابقة', 'نماذج اختبارات', 'تجميعات أسئلة', 'شروحات فيديو',
-            
-            # رسائل أكاديمية عليا
-            'رسالة ماجستير', 'رسالة دكتوراه', 'أطروحة', 'بحث علمي', 'نشر', 'ورقة بحثية', 'مؤتمر', 'مجلة علمية', 'تحكيم', 'نشر علمي',
-            'إعداد رسالة ماجستير', 'كتابة أطروحة', 'نشر بحث', 'مؤتمر علمي', 'مجلة محكمة',
-            
-            # برمجة وتقنية
-            'برمجة', 'كود', 'برنامج', 'تطبيق', 'موقع', 'نظام', 'قاعدة بيانات', 'خوارزمية', 'هيكل بيانات', 'واجهة', 'تصميم', 'اختبار', 'debug', 'troubleshooting',
-            'برمجة بايثون', 'برمجة جافا', 'برمجة سي', 'تطوير موقع', 'تصميم واجهات', 'اختبار برمجيات',
-            
-            # هندسة وتصميم
-            'رسم', 'أوتوكاد', 'سوليدوركس', 'ريفيت', 'ديزاين', 'تصميم معماري', 'إنشائي', 'ميكانيكي', 'كهربائي', 'civil', 'mechanical', 'electrical',
-            'رسومات هندسية', 'تصميم معماري', 'تصميم داخلي', 'مخططات هندسية', 'خرائط',
-            
-            # جرافيك وتصميم
-            'فوتوشوب', 'إليستريتور', 'ان ديزاين', 'جرافيك', 'graphic design', 'تصميم جرافيكي', 'شعار', 'logo', 'هوية', 'identity', 'براند', 'brand',
-            'تصميم شعار', 'هوية بصرية', 'براندينغ', 'تصميم إعلانات',
-            
-            # ترجمة وتحرير
-            'ترجمة لغة', 'ترجمة إنجليزي', 'ترجمة عربي', 'ترجمة علمية', 'ترجمة أدبية', 'تلخيص كتاب', 'تلخيص مقال', 'تحرير نص', 'تدقيق لغوي',
-            'ترجمة وثائق', 'ترجمة أبحاث', 'تدقيق نحوي', 'تحرير أكاديمي',
-            
-            # صيغ طلب المساعدة
-            'أحد يساعد', 'أحد يحل', 'أحد يشرح', 'أحد يعمل', 'أحد يسوي', 'أحد يصمم', 'أحد يبرمج', 'أحد يترجم', 'أحد يلخص', 'أحد يدقق', 'أحد يراجع',
-            'اللي عنده خبرة', 'اللي يقدر يساعد', 'اللي يعرف', 'اللي عنده فكرة',
-            
-            # كلمات خليجية إضافية
-            'ابي احد', 'ابي حد', 'تعرفون احد', 'تعرفون حد', 'من يعرف احد', 'من يعرف حد', 'احد عنده', 'حد عنده',
-            'عندكم', 'فيكم', 'تقدرون', 'تكفون', 'يا جماعة', 'يا شباب', 'يا بنات',
-            
-            # كلمات إنجليزية شائعة
-            'help', 'need help', 'urgent', 'please help', 'assignment help', 'homework help', 'research help', 'project help',
-            'essay', 'paper', 'thesis', 'dissertation', 'case study', 'lab report', 'coding help', 'programming help',
-            
-            # كلمات فارسية (قد تظهر)
-            'کمک', 'راهنمایی', 'پروژه', 'تکلیف', 'تحقیق',
-            
-            # كلمات أردية (قد تظهر)
-            'مدد', 'کام', 'پروجیکٹ', 'اسائنمنٹ',
-            
-            # كلمات متفرقة
-            'عاجل', 'هام', 'ضروري جدا', 'الله يجزاكم خير', 'بيض الله وجهكم', 'مشكورين', 'يعطيكم العافية',
-            'نبي', 'نبغى', 'تبي', 'تبغى', 'يبي', 'يبغى'
+            'مساعدة', 'ساعدوني', 'ساعدني', 'أبي أحد', 'أبي حد', 'أبي مساعدة', 'محتاج', 'ضروري',
+            'واجب', 'واجبات', 'تكليف', 'تكاليف', 'حل', 'يحل', 'اسايمنت', 'assignment', 'homework',
+            'بحث', 'بحوث', 'تقرير', 'تقارير', 'ريبورت', 'report', 'research',
+            'مشروع', 'مشاريع', 'بروجكت', 'project', 'مشروع تخرج',
+            'برزنتيشن', 'presentation', 'بوربوينت', 'powerpoint', 'عرض', 'تصميم', 'بوستر', 'poster',
+            'اختبار', 'اختبارات', 'كويز', 'كويزات', 'فاينل', 'ميد', 'امتحان',
+            'شرح', 'يشرح', 'درس', 'دروس', 'ملخص', 'ملخصات',
+            'رياضيات', 'فيزياء', 'كيمياء', 'أحياء', 'إنجليزي', 'برمجة', 'هندسة',
+            'دكتور خصوصي', 'مدرس خصوصي', 'دروس خصوصية',
+            'تعرفون أحد', 'تعرفون حد', 'من يعرف', 'من تعرف', 'أحد يعرف', 'حد يعرف', 'وين ألقى',
+            'ترجمة', 'تلخيص', 'تدقيق', 'صياغة', 'كتابة', 'إعداد',
+            'مراجعة', 'ليالي الامتحان', 'أسئلة', 'إجابات', 'نماذج', 'تجميعات',
+            'رسالة ماجستير', 'رسالة دكتوراه', 'أطروحة', 'بحث علمي',
+            'أحد يساعد', 'أحد يحل', 'أحد يشرح', 'أحد يسوي'
         ]
         for kw in default_keywords:
             c.execute("INSERT OR IGNORE INTO keywords (keyword) VALUES (?)", (kw,))
     
-    # إعدادات الذكاء الاصطناعي
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('openrouter_key', ''))
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ai_enabled', '0'))
-    
     conn.commit()
     conn.close()
 
 init_db()
 
-# دوال قاعدة البيانات (كما في السابق)
+# دوال قاعدة البيانات
 def db_get_keywords():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -229,17 +162,12 @@ def db_set_setting(key, value):
     conn.close()
 
 # -------------------------------------------------------------------
-# 2. تخزين مؤقت للجلسات (كما في النموذج البسيط)
+# 3. تخزين مؤقت للجلسات
 # -------------------------------------------------------------------
 active_users = {}  # phone -> {client, phone, api_id, api_hash, status, alert_group}
 
-def run_async(coro):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop.run_until_complete(coro)
-
 # -------------------------------------------------------------------
-# 3. الذكاء الاصطناعي (OpenRouter)
+# 4. الذكاء الاصطناعي (OpenRouter)
 # -------------------------------------------------------------------
 async def classify_message(text, api_key):
     if not api_key:
@@ -268,23 +196,16 @@ async def classify_message(text, api_key):
     return {"type": "seeker", "confidence": 0, "reason": "AI error"}
 
 # -------------------------------------------------------------------
-# 4. محرك الرصد (بسيط، يعمل في الخلفية)
+# 5. محرك الرصد (يعمل في الحلقة الموحدة)
 # -------------------------------------------------------------------
 class RadarEngine:
     def __init__(self):
         self.clients = {}  # phone -> client
-        self.loop = asyncio.new_event_loop()
-        self.thread = threading.Thread(target=self._start_loop, daemon=True)
-        self.thread.start()
-
-    def _start_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
 
     async def _monitor_account(self, acc):
         phone = acc['phone']
         session_path = f"session_{phone}"
-        client = TelegramClient(session_path, int(acc['api_id']), acc['api_hash'])
+        client = TelegramClient(session_path, int(acc['api_id']), acc['api_hash'], loop=loop)
         try:
             await client.connect()
             if not await client.is_user_authorized():
@@ -297,14 +218,14 @@ class RadarEngine:
                 keywords = db_get_keywords()
                 if not any(kw in event.raw_text.lower() for kw in keywords):
                     return
-                # تصنيف بالذكاء الاصطناعي
+                # تصنيف ذكي
                 ai_enabled = db_get_setting('ai_enabled') == '1'
                 api_key = db_get_setting('openrouter_key')
                 if ai_enabled and api_key:
                     result = await classify_message(event.raw_text, api_key)
                     if result.get('type') == 'marketer' and int(result.get('confidence', 0)) > 60:
-                        return  # تجاهل المعلن
-                # إرسال إلى المجموعة المحددة
+                        return
+                # إرسال
                 if acc.get('alert_group'):
                     try:
                         dest = acc['alert_group']
@@ -321,17 +242,18 @@ class RadarEngine:
     def start_all(self):
         accounts = db_get_accounts()
         for acc in accounts:
-            asyncio.run_coroutine_threadsafe(self._monitor_account(acc), self.loop)
+            asyncio.run_coroutine_threadsafe(self._monitor_account(acc), loop)
 
     def stop_all(self):
         for client in self.clients.values():
-            asyncio.run_coroutine_threadsafe(client.disconnect(), self.loop)
+            asyncio.run_coroutine_threadsafe(client.disconnect(), loop)
 
 radar = RadarEngine()
-radar.start_all()  # بدء الرصد التلقائي
+# بدء الرصد بعد ثانية لضمان اكتمال التهيئة
+loop.call_later(1, lambda: asyncio.create_task(radar.start_all()))
 
 # -------------------------------------------------------------------
-# 5. مسارات Flask (على نمط النموذج البسيط)
+# 6. مسارات Flask
 # -------------------------------------------------------------------
 @app.route('/')
 def index():
@@ -344,7 +266,7 @@ def login_step1():
     phone = request.form['phone']
     alert_group = request.form.get('alert_group', '')
 
-    client = TelegramClient('temp_session', int(api_id), api_hash)
+    client = TelegramClient('temp_session', int(api_id), api_hash, loop=loop)
     try:
         run_async(client.connect())
         run_async(client.send_code_request(phone))
@@ -386,12 +308,13 @@ def verify_code():
         run_async(client.sign_in(phone=user['phone'], code=code))
         user['status'] = 'logged_in'
         db_add_account(user['phone'], user['api_id'], user['api_hash'], user['alert_group'])
+        # إضافة إلى محرك الرصد
         asyncio.run_coroutine_threadsafe(radar._monitor_account({
             'phone': user['phone'],
             'api_id': user['api_id'],
             'api_hash': user['api_hash'],
             'alert_group': user['alert_group']
-        }), radar.loop)
+        }), loop)
         return redirect(url_for('dashboard'))
     except errors.SessionPasswordNeededError:
         user['status'] = 'waiting_2fa'
@@ -425,7 +348,7 @@ def verify_2fa():
             'api_id': user['api_id'],
             'api_hash': user['api_hash'],
             'alert_group': user['alert_group']
-        }), radar.loop)
+        }), loop)
         return redirect(url_for('dashboard'))
     except errors.PasswordHashInvalidError:
         flash('كلمة المرور خاطئة', 'danger')
@@ -470,7 +393,7 @@ def save_ai_settings():
 def delete_account(phone):
     db_delete_account(phone)
     if phone in radar.clients:
-        asyncio.run_coroutine_threadsafe(radar.clients[phone].disconnect(), radar.loop)
+        asyncio.run_coroutine_threadsafe(radar.clients[phone].disconnect(), loop)
         del radar.clients[phone]
     return redirect(url_for('dashboard'))
 
@@ -478,7 +401,6 @@ def delete_account(phone):
 def logout():
     session_id = session.pop('session_id', None)
     if session_id in active_users:
-        # محاولة قطع اتصال العميل المؤقت
         client = active_users[session_id].get('client')
         if client:
             try:
