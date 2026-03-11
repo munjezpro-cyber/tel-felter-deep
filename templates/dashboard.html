@@ -287,10 +287,74 @@
     </div>
 
     <script>
-        // تحديث الصفحة كل 10 ثواني (اختياري)
-        setTimeout(() => {
-            location.reload();
-        }, 10000);
+    // دالة لتحديث البيانات فقط (بدون إعادة تحميل الصفحة)
+    async function refreshData() {
+        try {
+            const response = await fetch('/api/dashboard-data');
+            if (!response.ok) throw new Error('فشل التحميل');
+            const data = await response.json();
+            
+            // تحديث حالة الرادار
+            const radarStatus = document.getElementById('radar-status');
+            if (radarStatus) {
+                radarStatus.innerHTML = data.radar_status ? 
+                    '<span class="status-badge status-active">🟢 يعمل</span>' : 
+                    '<span class="status-badge status-inactive">🔴 متوقف</span>';
+            }
+            
+            // تحديث الكلمات المفتاحية
+            const keywordsTextarea = document.querySelector('textarea[name="keywords"]');
+            if (keywordsTextarea) {
+                keywordsTextarea.value = data.keywords_text;
+            }
+            
+            // تحديث قائمة الحسابات
+            const accountsTable = document.querySelector('table');
+            if (accountsTable && data.accounts.length > 0) {
+                let html = '';
+                data.accounts.forEach(acc => {
+                    html += `<tr>
+                        <td>${acc.phone}</td>
+                        <td>${acc.alert_group || 'غير محدد'}</td>
+                        <td>
+                            <span class="status-badge ${acc.enabled ? 'status-active' : 'status-inactive'}">
+                                ${acc.enabled ? 'نشط' : 'متوقف'}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex">
+                                <form action="/toggle-account/${acc.phone}" method="POST" style="display: inline;">
+                                    <button type="submit" style="background-color: #475569; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                        ${acc.enabled ? '⏸️ إيقاف' : '▶️ تشغيل'}
+                                    </button>
+                                </form>
+                                <a href="/delete-account/${acc.phone}" class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="return confirm('هل أنت متأكد؟')">🗑️ حذف</a>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+                accountsTable.querySelector('tbody').innerHTML = html;
+            }
+            
+            // تحديث سجل الأحداث
+            const logsDiv = document.querySelector('.logs-container');
+            if (logsDiv && data.logs.length > 0) {
+                let logsHtml = '';
+                data.logs.forEach(log => {
+                    logsHtml += `<div style="color: #86efac; border-bottom: 1px solid #334155; padding: 0.25rem 0;">${log}</div>`;
+                });
+                logsDiv.innerHTML = logsHtml;
+            }
+        } catch (e) {
+            console.error('خطأ في تحديث البيانات:', e);
+        }
+    }
+
+    // تحديث البيانات كل 10 ثوانٍ
+    setInterval(refreshData, 10000);
+    
+    // تحديث فوري عند تحميل الصفحة
+    refreshData();
     </script>
 </body>
 </html>
