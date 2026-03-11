@@ -311,8 +311,8 @@ radar = RadarEngine()
 
 # تشغيل الرادار إذا كان مفعلاً في الإعدادات
 if db_get_setting('radar_status') == '1':
-    loop.call_later(2, lambda: asyncio.create_task(radar.start_all()))
-
+    loop.call_later(2, radar.start_all)
+    
 # -------------------------------------------------------------------
 # 6. مسارات Flask
 # -------------------------------------------------------------------
