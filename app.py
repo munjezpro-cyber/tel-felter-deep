@@ -137,8 +137,7 @@ def db_get_keywords(max_retries=3):
             return keywords
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
-                continue
+                continue  # إعادة محاولة فورية
             else:
                 print(f"⚠️ خطأ في db_get_keywords: {e}")
                 return []
@@ -158,7 +157,6 @@ def db_get_accounts(max_retries=3):
             return accounts
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_get_accounts: {e}")
@@ -176,7 +174,6 @@ def db_get_all_accounts(max_retries=3):
             return accounts
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_get_all_accounts: {e}")
@@ -197,7 +194,6 @@ def db_add_account(phone, api_id, api_hash, alert_group, max_retries=3):
             return False
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_add_account: {e}")
@@ -221,7 +217,6 @@ def db_delete_account(phone, max_retries=3):
             return
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_delete_account: {e}")
@@ -238,7 +233,6 @@ def db_update_account_enabled(phone, enabled, max_retries=3):
             return
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_update_account_enabled: {e}")
@@ -255,7 +249,6 @@ def db_get_setting(key, default='', max_retries=3):
             return row[0] if row else default
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_get_setting: {e}")
@@ -272,7 +265,6 @@ def db_set_setting(key, value, max_retries=3):
             return
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_set_setting: {e}")
@@ -290,7 +282,6 @@ def db_log_event(content, max_retries=3):
             return
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(0.5)
                 continue
             else:
                 print(f"⚠️ خطأ في db_log_event: {e}")
@@ -370,11 +361,11 @@ class RadarEngine:
                     keywords = db_get_keywords()
                     if not any(kw in event.raw_text.lower() for kw in keywords):
                         return
-                    
+
                     # التحقق من حالة الذكاء الاصطناعي
                     ai_enabled = db_get_setting('ai_enabled') == '1'
                     api_key = db_get_setting('openrouter_key')
-                    
+
                     # إذا كان الذكاء مفعلاً، نقوم بالتصنيف
                     if ai_enabled and api_key:
                         result = await classify_message(event.raw_text, api_key)
@@ -386,23 +377,67 @@ class RadarEngine:
                     else:
                         # الذكاء معطل، نرسل كل الرسائل
                         db_log_event(f"📨 إرسال رسالة (ذكاء معطل) من {phone}")
-                    
+
+                    # استخراج معلومات المرسل والمجموعة
+                    sender = await event.get_sender()
+                    chat = await event.get_chat()
+
+                    # اسم المرسل
+                    sender_name = getattr(sender, 'first_name', '') or ''
+                    if getattr(sender, 'last_name', None):
+                        sender_name += f" {sender.last_name}"
+                    sender_name = sender_name.strip() or "غير معروف"
+
+                    # رابط المرسل (يحاول استخدام اليوزر أولاً، ثم الرابط المباشر)
+                    sender_username = getattr(sender, 'username', None)
+                    sender_id = sender.id
+                    if sender_username:
+                        sender_link = f"https://t.me/{sender_username}"
+                    else:
+                        sender_link = f"tg://user?id={sender_id}"
+
+                    # اسم المجموعة ورابطها
+                    chat_title = getattr(chat, 'title', 'غير معروف')
+                    chat_username = getattr(chat, 'username', None)
+                    chat_id = chat.id
+                    if chat_username:
+                        chat_link = f"https://t.me/{chat_username}"
+                    else:
+                        # رابط مباشر للرسالة في المجموعات الخاصة
+                        chat_link = f"https://t.me/c/{chat_id}/{event.id}"
+
+                    # بناء التذييل
+                    footer = f"""
+━━━━━━━━━━━━━━━━━━━
+🚨 **رادار ذكي - طلب مساعدة**
+━━━━━━━━━━━━━━━━━━━
+📝 **النص الأصلي**: {event.raw_text}
+👤 **المرسل**: {sender_name} - [رابط]({sender_link})
+🏢 **المجموعة**: {chat_title} - [رابط]({chat_link})
+━━━━━━━━━━━━━━━━━━━
+                    """
+
                     # إرسال إلى مجموعة التنبيهات
                     if acc.get('alert_group'):
                         dest = acc['alert_group']
                         try:
                             # محاولة إعادة التوجيه أولاً
                             await client.forward_messages(dest, event.message)
-                            db_log_event(f"📤 تم إرسال رسالة من {phone}")
+                            # إرسال التذييل كرسالة منفصلة
+                            await client.send_message(dest, footer)
+                            db_log_event(f"📤 تم إرسال رسالة من {phone} (مع تذييل)")
                         except errors.FloodWaitError as e:
                             db_log_event(f"⏳ Flood wait {e.seconds} ثانية من {phone}")
                             await asyncio.sleep(e.seconds)
                         except errors.ChatForwardsRestrictedError:
-                            try:
-                                await client.send_message(dest, f"{event.raw_text}\n\n(تم إرسال نسخة)")
-                                db_log_event(f"📤 تم إرسال نسخة من {phone}")
-                            except Exception as e:
-                                db_log_event(f"❌ فشل إرسال من {phone}: {e}")
+                            # إذا كان التحويل ممنوعاً، نرسل نسخة من النص مع التذييل
+                            full_message = f"{event.raw_text}\n\n{footer}"
+                            if event.message.media:
+                                # إرسال الميديا مع الكابتشن
+                                await client.send_file(dest, event.message.media, caption=full_message)
+                            else:
+                                await client.send_message(dest, full_message)
+                            db_log_event(f"📤 تم إرسال نسخة من {phone} (مع تذييل)")
                         except Exception as e:
                             db_log_event(f"❌ فشل إرسال من {phone}: {e}")
                 except Exception as e:
@@ -621,12 +656,22 @@ def toggle_account(phone):
     if not session_id or session_id not in active_users or active_users[session_id]['status'] != 'logged_in':
         return redirect(url_for('index'))
     
-    # الحصول على الحالة الحالية
-    enabled = db_get_setting(f"account_enabled_{phone}", '1') == '1'
-    new_enabled = not enabled
-    db_set_setting(f"account_enabled_{phone}", '1' if new_enabled else '0')
+    # الحصول على الحالة الحالية من قاعدة البيانات
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT enabled FROM accounts WHERE phone = ?", (phone,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        flash('الحساب غير موجود', 'danger')
+        return redirect(url_for('dashboard'))
+    enabled = row[0]
+    new_enabled = 1 if enabled == 0 else 0
+    c.execute("UPDATE accounts SET enabled = ? WHERE phone = ?", (new_enabled, phone))
+    conn.commit()
+    conn.close()
     
-    if new_enabled:
+    if new_enabled == 1:
         # تشغيل الحساب
         conn = get_db()
         c = conn.cursor()
