@@ -3,8 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from telethon import TelegramClient, events, errors
 import asyncio
 import os
-import psycopg2
-import psycopg2.pool
+import sqlite3
 import json
 import aiohttp
 import threading
@@ -34,61 +33,53 @@ def run_async(coro):
     return future.result(timeout=30)
 
 # -------------------------------------------------------------------
-# 2. قاعدة البيانات PostgreSQL (من Railway)
+# 2. قاعدة البيانات SQLite
 # -------------------------------------------------------------------
-DATABASE_URL = os.environ.get("DATABASE_URL", None)
-if not DATABASE_URL:
-    raise Exception("DATABASE_URL not set")
-
-# إنشاء pool اتصالات
-db_pool = psycopg2.pool.SimpleConnectionPool(1, 20, dsn=DATABASE_URL)
+DB_PATH = "radar.db"
 
 def get_db():
-    return db_pool.getconn()
-
-def put_db(conn):
-    db_pool.putconn(conn)
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 def init_db():
     conn = get_db()
-    cur = conn.cursor()
+    c = conn.cursor()
     # جدول الحسابات
-    cur.execute('''
+    c.execute('''
         CREATE TABLE IF NOT EXISTS accounts (
             phone TEXT PRIMARY KEY,
             api_id INTEGER NOT NULL,
             api_hash TEXT NOT NULL,
             alert_group TEXT,
-            enabled BOOLEAN DEFAULT TRUE,
+            enabled BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     # جدول الكلمات المفتاحية
-    cur.execute('''
+    c.execute('''
         CREATE TABLE IF NOT EXISTS keywords (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             keyword TEXT UNIQUE NOT NULL
         )
     ''')
     # جدول الإعدادات
-    cur.execute('''
+    c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
         )
     ''')
     # جدول السجلات
-    cur.execute('''
+    c.execute('''
         CREATE TABLE IF NOT EXISTS logs (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             content TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
-    # إدراج الكلمات المفتاحية الافتراضية (القائمة الضخمة)
-    cur.execute("SELECT COUNT(*) FROM keywords")
-    if cur.fetchone()[0] == 0:
+    # إدراج الكلمات المفتاحية الافتراضية
+    c.execute("SELECT COUNT(*) FROM keywords")
+    if c.fetchone()[0] == 0:
         default_keywords = [
             'مساعدة', 'ساعدوني', 'ساعدني', 'أبي أحد', 'أبي حد', 'أبي مساعدة', 'محتاج', 'محتاجة', 'ضروري', 'مستعجل', 'أرجوكم', 'لو سمحتم',
             'الرجاء المساعدة', 'تحتاج مساعدة', 'نحتاج مساعدة', 'يحتاج مساعدة', 'تحتاج مساعدة',
@@ -112,18 +103,20 @@ def init_db():
             'help', 'need help', 'urgent', 'assignment help', 'homework help', 'project help'
         ]
         for kw in default_keywords:
-            cur.execute("INSERT INTO keywords (keyword) VALUES (%s) ON CONFLICT (keyword) DO NOTHING", (kw,))
+            try:
+                c.execute("INSERT INTO keywords (keyword) VALUES (?)", (kw,))
+            except:
+                pass
     
     # إعدادات افتراضية
-    cur.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('openrouter_key', ''))
-    cur.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('ai_enabled', '0'))
-    cur.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('admin_email', 'admin@radar.com'))
-    cur.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('admin_password', generate_password_hash('admin123')))
-    cur.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING", ('radar_status', '1'))  # 1 يعني يعمل
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('openrouter_key', ''))
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ai_enabled', '0'))
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('admin_email', 'admin@radar.com'))
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('admin_password', generate_password_hash('admin123')))
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('radar_status', '1'))
     
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
     print("✅ Database initialized successfully")
 
 init_db()
@@ -131,93 +124,80 @@ init_db()
 # دوال مساعدة لقاعدة البيانات
 def db_get_keywords():
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT keyword FROM keywords")
-    keywords = [row[0] for row in cur.fetchall()]
-    cur.close()
-    put_db(conn)
+    c = conn.cursor()
+    c.execute("SELECT keyword FROM keywords")
+    keywords = [row[0] for row in c.fetchall()]
+    conn.close()
     return keywords
 
 def db_get_accounts():
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts WHERE enabled = TRUE")
-    rows = cur.fetchall()
-    accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in rows]
-    cur.close()
-    put_db(conn)
+    c = conn.cursor()
+    c.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts WHERE enabled = 1")
+    accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in c.fetchall()]
+    conn.close()
     return accounts
 
 def db_get_all_accounts():
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts")
-    rows = cur.fetchall()
-    accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in rows]
-    cur.close()
-    put_db(conn)
+    c = conn.cursor()
+    c.execute("SELECT phone, api_id, api_hash, alert_group, enabled FROM accounts")
+    accounts = [{'phone': r[0], 'api_id': r[1], 'api_hash': r[2], 'alert_group': r[3], 'enabled': r[4]} for r in c.fetchall()]
+    conn.close()
     return accounts
 
 def db_add_account(phone, api_id, api_hash, alert_group):
     conn = get_db()
-    cur = conn.cursor()
+    c = conn.cursor()
     try:
-        cur.execute("INSERT INTO accounts (phone, api_id, api_hash, alert_group) VALUES (%s, %s, %s, %s)",
-                    (phone, api_id, api_hash, alert_group))
+        c.execute("INSERT INTO accounts (phone, api_id, api_hash, alert_group) VALUES (?, ?, ?, ?)",
+                  (phone, api_id, api_hash, alert_group))
         conn.commit()
-        cur.close()
-        put_db(conn)
+        conn.close()
         return True
-    except psycopg2.IntegrityError:
-        conn.rollback()
-        cur.close()
-        put_db(conn)
+    except sqlite3.IntegrityError:
+        conn.close()
         return False
 
 def db_delete_account(phone):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM accounts WHERE phone = %s", (phone,))
+    c = conn.cursor()
+    c.execute("DELETE FROM accounts WHERE phone = ?", (phone,))
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
 
 def db_update_account_enabled(phone, enabled):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("UPDATE accounts SET enabled = %s WHERE phone = %s", (enabled, phone))
+    c = conn.cursor()
+    c.execute("UPDATE accounts SET enabled = ? WHERE phone = ?", (enabled, phone))
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
 
 def db_get_setting(key, default=''):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT value FROM settings WHERE key = %s", (key,))
-    row = cur.fetchone()
-    cur.close()
-    put_db(conn)
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = c.fetchone()
+    conn.close()
     return row[0] if row else default
 
 def db_set_setting(key, value):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (key, value))
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
 
 def db_log_event(content):
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO logs (content) VALUES (%s)", (content,))
+    c = conn.cursor()
+    c.execute("INSERT INTO logs (content) VALUES (?)", (content,))
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
     print(content)
 
 # -------------------------------------------------------------------
-# 3. تخزين مؤقت للجلسات (أثناء تسجيل الدخول)
+# 3. تخزين مؤقت للجلسات
 # -------------------------------------------------------------------
 active_users = {}  # phone -> {client, phone, api_id, api_hash, status, alert_group}
 
@@ -251,7 +231,7 @@ async def classify_message(text, api_key):
     return {"type": "seeker", "confidence": 0, "reason": "AI error"}
 
 # -------------------------------------------------------------------
-# 5. محرك الرصد (يعمل في الخلفية)
+# 5. محرك الرصد
 # -------------------------------------------------------------------
 class RadarEngine:
     def __init__(self):
@@ -275,7 +255,6 @@ class RadarEngine:
                 keywords = db_get_keywords()
                 if not any(kw in event.raw_text.lower() for kw in keywords):
                     return
-                # التصنيف الذكي
                 ai_enabled = db_get_setting('ai_enabled') == '1'
                 api_key = db_get_setting('openrouter_key')
                 if ai_enabled and api_key:
@@ -283,7 +262,6 @@ class RadarEngine:
                     if result.get('type') == 'marketer' and int(result.get('confidence', 0)) > 60:
                         db_log_event(f"🚫 تجاهل رسالة معلن من {phone}")
                         return
-                # إرسال إلى مجموعة التنبيهات
                 if acc.get('alert_group'):
                     try:
                         dest = acc['alert_group']
@@ -303,7 +281,7 @@ class RadarEngine:
                 del self.clients[phone]
 
     def start_all(self):
-        accounts = db_get_accounts()  # فقط النشطة
+        accounts = db_get_accounts()
         for acc in accounts:
             asyncio.run_coroutine_threadsafe(self._monitor_account(acc), loop)
 
@@ -314,7 +292,7 @@ class RadarEngine:
 
 radar = RadarEngine()
 
-# متغير حالة الرادار (يمكن قراءته من قاعدة البيانات)
+# متغير حالة الرادار
 radar_status = db_get_setting('radar_status') == '1'
 if radar_status:
     loop.call_later(2, lambda: asyncio.create_task(radar.start_all()))
@@ -375,7 +353,6 @@ def verify_code():
         run_async(client.sign_in(phone=user['phone'], code=code))
         user['status'] = 'logged_in'
         db_add_account(user['phone'], user['api_id'], user['api_hash'], user['alert_group'])
-        # إضافة إلى الرادار إذا كان مفعلاً
         if db_get_setting('radar_status') == '1':
             asyncio.run_coroutine_threadsafe(radar._monitor_account({
                 'phone': user['phone'],
@@ -441,11 +418,10 @@ def dashboard():
     radar_status = db_get_setting('radar_status') == '1'
     # قراءة آخر 50 حدث
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT content FROM logs ORDER BY created_at DESC LIMIT 50")
-    logs = [row[0] for row in cur.fetchall()]
-    cur.close()
-    put_db(conn)
+    c = conn.cursor()
+    c.execute("SELECT content FROM logs ORDER BY created_at DESC LIMIT 50")
+    logs = [row[0] for row in c.fetchall()]
+    conn.close()
     return render_template('dashboard.html', 
                            accounts=accounts,
                            keywords_text=keywords_text,
@@ -477,25 +453,21 @@ def toggle_account(phone):
     if not session_id or session_id not in active_users or active_users[session_id]['status'] != 'logged_in':
         return redirect(url_for('index'))
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT enabled FROM accounts WHERE phone = %s", (phone,))
-    enabled = cur.fetchone()[0]
-    cur.execute("UPDATE accounts SET enabled = %s WHERE phone = %s", (not enabled, phone))
+    c = conn.cursor()
+    c.execute("SELECT enabled FROM accounts WHERE phone = ?", (phone,))
+    enabled = c.fetchone()[0]
+    c.execute("UPDATE accounts SET enabled = ? WHERE phone = ?", (not enabled, phone))
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
     if enabled:
-        # كان مفعلاً، نوقفه
         if phone in radar.clients:
             asyncio.run_coroutine_threadsafe(radar.clients[phone].disconnect(), loop)
             del radar.clients[phone]
         db_log_event(f"⏸️ تم إيقاف حساب {phone}")
     else:
-        # نفعله
-        cur = conn.cursor()
-        cur.execute("SELECT api_id, api_hash, alert_group FROM accounts WHERE phone = %s", (phone,))
-        row = cur.fetchone()
-        cur.close()
+        c = conn.cursor()
+        c.execute("SELECT api_id, api_hash, alert_group FROM accounts WHERE phone = ?", (phone,))
+        row = c.fetchone()
         if row:
             asyncio.run_coroutine_threadsafe(radar._monitor_account({
                 'phone': phone,
@@ -509,7 +481,6 @@ def toggle_account(phone):
 
 @app.route('/add-account', methods=['POST'])
 def add_account_from_dashboard():
-    """نفس /login لكن من داخل الداشبورد"""
     return login_step1()
 
 @app.route('/save-keywords', methods=['POST'])
@@ -520,13 +491,12 @@ def save_keywords():
     keywords_text = request.form['keywords']
     keywords_list = [k.strip() for k in keywords_text.split('\n') if k.strip()]
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM keywords")
+    c = conn.cursor()
+    c.execute("DELETE FROM keywords")
     for kw in keywords_list:
-        cur.execute("INSERT INTO keywords (keyword) VALUES (%s) ON CONFLICT DO NOTHING", (kw,))
+        c.execute("INSERT INTO keywords (keyword) VALUES (?)", (kw,))
     conn.commit()
-    cur.close()
-    put_db(conn)
+    conn.close()
     db_log_event("📝 تم تحديث الكلمات المفتاحية")
     flash('تم حفظ الكلمات المفتاحية', 'success')
     return redirect(url_for('dashboard'))
@@ -540,7 +510,7 @@ def save_ai_settings():
     api_key = request.form['openrouter_key']
     db_set_setting('ai_enabled', ai_enabled)
     db_set_setting('openrouter_key', api_key)
-    db_log_event(f"⚙️ تم تحديث إعدادات الذكاء الاصطناعي")
+    db_log_event("⚙️ تم تحديث إعدادات الذكاء الاصطناعي")
     flash('تم حفظ الإعدادات', 'success')
     return redirect(url_for('dashboard'))
 
