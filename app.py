@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from telethon import TelegramClient, events, errors
 import asyncio
 import os
@@ -77,7 +77,7 @@ def init_db():
         )
     ''')
     
-    # إدراج الكلمات المفتاحية الافتراضية
+    # إدراج الكلمات المفتاحية الافتراضية (القائمة الضخمة)
     c.execute("SELECT COUNT(*) FROM keywords")
     if c.fetchone()[0] == 0:
         default_keywords = [
@@ -88,7 +88,7 @@ def init_db():
             'مشروع', 'مشاريع', 'بروجكت', 'project', 'بروجيكت', 'مشروع تخرج', 'مشاريع تخرج', 'مشروعي', 'بروجكتي', 'خطة مشروع', 'مشروع نهائي',
             'برزنتيشن', 'presentation', 'بوربوينت', 'powerpoint', 'عرض', 'عروض', 'تصميم', 'تصاميم', 'بوستر', 'poster', 'برشور', 'brochure',
             'فيديو', 'فيديوهات', 'مونتاج', 'مقطع', 'تصوير', 'تحرير', 'انميشن', 'animation', 'موشن جرافيك',
-            'اختبار', 'اختبارات', 'كويز', 'كويزات', 'فاينل', 'ميد', 'امتحان', 'امتحانات', 'اختبار نهائي', 'اختبار منتصف',
+            'اختبار', 'اختبارات', 'كويز', 'كويزات', 'فاينл', 'ميد', 'امتحان', 'امتحانات', 'اختبار نهائي', 'اختبار منتصف',
             'شرح', 'يشرح', 'درس', 'دروس', 'ملخص', 'ملخصات', 'مذكرة', 'مذكرات', 'أساسيات', 'تمارين', 'تدريبات', 'فهم', 'استيعاب', 'تبسيط',
             'رياضيات', 'فيزياء', 'كيمياء', 'أحياء', 'إنجليزي', 'عربي', 'تاريخ', 'جغرافيا', 'فلسفة', 'منطق', 'قانون', 'محاسبة', 'اقتصاد', 'إدارة', 'تسويق', 'برمجة', 'هندسة', 'طب', 'صيدلة', 'تمريض', 'حقوق',
             'دكتور خصوصي', 'مدرس خصوصي', 'معلم خصوصي', 'مدرسة خصوصية', 'دروس خصوصية', 'تدريس خصوصي', 'شرح خصوصي', 'يشرح خصوصي',
@@ -209,8 +209,14 @@ async def classify_message(text, api_key):
         return {"type": "seeker", "confidence": 100, "reason": "AI disabled"}
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     prompt = f"""
-    أنت مساعد متخصص في تصنيف الرسائل. حدد ما إذا كان المرسل طالباً يطلب مساعدة (seeker) أم معلناً يروج لخدمات (marketer).
-    أعد JSON: {{"type": "seeker" أو "marketer", "confidence": 0-100, "reason": "السبب"}}
+    أنت مساعد ذكي متخصص في تحليل رسائل تيليجرام وتصنيف المرسلين بدقة عالية. المهمة: تحديد ما إذا كان المرسل **طالباً يطلب مساعدة** (seeker) أم **معلناً يروج لخدمات** (marketer).
+
+    ### **معايير التصنيف الدقيقة**
+    - **طالب (seeker)**: يطلب مساعدة في مجاله الدراسي أو الأكاديمي. قد يطلب شرحاً، حل واجب، بحث، مشروع، ترجمة، إلخ. يستخدم عبارات مثل: "أبي أحد يحل"، "تعرفون حد"، "من يعرف"، "يشرح".
+    - **معلن (marketer)**: يقدم خدمات تجارية، يحتوي على روابط واتساب أو تيليجرام، قوائم طويلة بالخدمات، استخدام رموز تزيينية (⭐, ✅, ═════, ☆, 💯)، عبارات مثل "نقدم لكم", "للتواصل خاص", "عروض حصرية".
+
+    أعد النتيجة بصيغة JSON فقط: {{"type": "seeker" أو "marketer", "confidence": 0-100, "reason": "سبب مختصر"}}
+
     الرسالة: {text}
     """
     payload = {
@@ -219,7 +225,7 @@ async def classify_message(text, api_key):
     }
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=10) as resp:
+            async with session.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=15) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     content = data['choices'][0]['message']['content']
@@ -231,7 +237,7 @@ async def classify_message(text, api_key):
     return {"type": "seeker", "confidence": 0, "reason": "AI error"}
 
 # -------------------------------------------------------------------
-# 5. محرك الرصد
+# 5. محرك الرصد (يدعم إيقاف/تشغيل الذكاء)
 # -------------------------------------------------------------------
 class RadarEngine:
     def __init__(self):
@@ -252,27 +258,38 @@ class RadarEngine:
             async def handler(event):
                 if event.is_private or event.out:
                     return
+                # جلب الكلمات المفتاحية والإعدادات من قاعدة البيانات
                 keywords = db_get_keywords()
                 if not any(kw in event.raw_text.lower() for kw in keywords):
                     return
+                # التحقق من حالة الذكاء الاصطناعي
                 ai_enabled = db_get_setting('ai_enabled') == '1'
                 api_key = db_get_setting('openrouter_key')
+                # إذا كان الذكاء مفعلاً، نقوم بالتصنيف
                 if ai_enabled and api_key:
                     result = await classify_message(event.raw_text, api_key)
                     if result.get('type') == 'marketer' and int(result.get('confidence', 0)) > 60:
-                        db_log_event(f"🚫 تجاهل رسالة معلن من {phone}")
-                        return
+                        db_log_event(f"🚫 تجاهل رسالة معلن من {phone} (ثقة {result.get('confidence')}%)")
+                        return  # لا ترسل
+                    else:
+                        db_log_event(f"✅ رسالة طالب من {phone} (ثقة {result.get('confidence',0)}%)")
+                else:
+                    # الذكاء معطل، نرسل كل الرسائل
+                    db_log_event(f"📨 إرسال رسالة (ذكاء معطل) من {phone}")
+                # إرسال إلى مجموعة التنبيهات
                 if acc.get('alert_group'):
                     try:
                         dest = acc['alert_group']
                         await client.forward_messages(dest, event.message)
                         db_log_event(f"📤 تم إرسال رسالة من {phone}")
-                    except Exception as e:
+                    except errors.ChatForwardsRestrictedError:
                         try:
                             await client.send_message(dest, f"{event.raw_text}\n\n(تم إرسال نسخة)")
                             db_log_event(f"📤 تم إرسال نسخة من {phone}")
-                        except:
+                        except Exception as e:
                             db_log_event(f"❌ فشل إرسال من {phone}: {e}")
+                    except Exception as e:
+                        db_log_event(f"❌ فشل إرسال من {phone}: {e}")
             await client.run_until_disconnected()
         except Exception as e:
             print(f"❌ خطأ في حساب {phone}: {e}")
@@ -281,7 +298,7 @@ class RadarEngine:
                 del self.clients[phone]
 
     def start_all(self):
-        accounts = db_get_accounts()
+        accounts = db_get_accounts()  # فقط النشطة
         for acc in accounts:
             asyncio.run_coroutine_threadsafe(self._monitor_account(acc), loop)
 
@@ -292,9 +309,8 @@ class RadarEngine:
 
 radar = RadarEngine()
 
-# متغير حالة الرادار
-radar_status = db_get_setting('radar_status') == '1'
-if radar_status:
+# تشغيل الرادار إذا كان مفعلاً في الإعدادات
+if db_get_setting('radar_status') == '1':
     loop.call_later(2, lambda: asyncio.create_task(radar.start_all()))
 
 # -------------------------------------------------------------------
@@ -430,6 +446,34 @@ def dashboard():
                            radar_status=radar_status,
                            logs=logs)
 
+@app.route('/api/dashboard-data')
+def dashboard_data():
+    session_id = session.get('session_id')
+    if not session_id or session_id not in active_users or active_users[session_id]['status'] != 'logged_in':
+        return jsonify({'error': 'غير مصرح'}), 401
+    
+    accounts = db_get_all_accounts()
+    keywords = db_get_keywords()
+    keywords_text = '\n'.join(keywords)
+    ai_enabled = db_get_setting('ai_enabled') == '1'
+    openrouter_key = db_get_setting('openrouter_key')
+    radar_status = db_get_setting('radar_status') == '1'
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT content FROM logs ORDER BY created_at DESC LIMIT 50")
+    logs = [row[0] for row in c.fetchall()]
+    conn.close()
+    
+    return jsonify({
+        'accounts': accounts,
+        'keywords_text': keywords_text,
+        'ai_enabled': ai_enabled,
+        'openrouter_key': openrouter_key,
+        'radar_status': radar_status,
+        'logs': logs
+    })
+
 @app.route('/toggle-radar', methods=['POST'])
 def toggle_radar():
     session_id = session.get('session_id')
@@ -460,14 +504,18 @@ def toggle_account(phone):
     conn.commit()
     conn.close()
     if enabled:
+        # كان مفعلاً، نوقفه
         if phone in radar.clients:
             asyncio.run_coroutine_threadsafe(radar.clients[phone].disconnect(), loop)
             del radar.clients[phone]
         db_log_event(f"⏸️ تم إيقاف حساب {phone}")
     else:
+        # نفعله
+        conn = get_db()
         c = conn.cursor()
         c.execute("SELECT api_id, api_hash, alert_group FROM accounts WHERE phone = ?", (phone,))
         row = c.fetchone()
+        conn.close()
         if row:
             asyncio.run_coroutine_threadsafe(radar._monitor_account({
                 'phone': phone,
