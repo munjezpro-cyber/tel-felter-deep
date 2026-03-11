@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 1rem; }
+        .container { max-width: 1200px; margin: auto; }
+        .card { background: #1e293b; padding: 1rem; border-radius: 1rem; margin-bottom: 1rem; }
+        h2 { color: #2dd4bf; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: right; border-bottom: 1px solid #334155; }
+        th { background-color: #2dd4bf; color: #0f172a; }
+        input, textarea { width: 100%; padding: 0.5rem; margin: 0.5rem 0; border: 1px solid #334155; border-radius: 0.5rem; background-color: #0f172a; color: #f8fafc; }
+        button { background-color: #2dd4bf; color: #0f172a; font-weight: bold; padding: 0.5rem 1rem; border: none; border-radius: 0.5rem; cursor: pointer; }
+        a { color: #fca5a5; text-decoration: none; }
+        .flex { display: flex; gap: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h2>حالة الرادار</h2>
+            <p>الرادار يعمل في الخلفية على جميع الحسابات المسجلة.</p>
+            <a href="/logout">تسجيل الخروج</a>
+        </div>
+
+        <div class="card">
+            <h2>الحسابات المضافة</h2>
+            <table>
+                <tr><th>رقم الهاتف</th><th>مجموعة التنبيهات</th><th>إجراءات</th></tr>
+                {% for acc in accounts %}
+                <tr>
+                    <td>{{ acc.phone }}</td>
+                    <td>{{ acc.alert_group or 'غير محدد' }}</td>
+                    <td><a href="/delete-account/{{ acc.phone }}" onclick="return confirm('هل أنت متأكد؟')">حذف</a></td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>الكلمات المفتاحية</h2>
+            <form action="/add-keyword" method="POST" style="display:flex; gap:0.5rem;">
+                <input type="text" name="keyword" placeholder="كلمة جديدة" style="flex-grow:1;" required>
+                <button type="submit">إضافة</button>
+            </form>
+            <ul>
+                {% for kw in keywords %}
+                <li>{{ kw }} <a href="/delete-keyword/{{ kw }}" style="margin-right:1rem;">❌</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>إعدادات الذكاء الاصطناعي</h2>
+            <form action="/save-ai-settings" method="POST">
+                <input type="text" name="openrouter_key" placeholder="مفتاح OpenRouter" value="{{ openrouter_key }}">
+                <label><input type="checkbox" name="ai_enabled" {% if ai_enabled == '1' %}checked{% endif %}> تفعيل التصنيف الذكي</label>
+                <button type="submit">حفظ</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
