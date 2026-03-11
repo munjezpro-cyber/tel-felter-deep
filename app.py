@@ -97,7 +97,7 @@ def init_db():
             'مراجعة', 'ليالي الامتحان', 'أسئلة', 'إجابات', 'نماذج', 'تجميعات', 'شروحات',
             'رسالة ماجستير', 'رسالة دكتوراه', 'أطروحة', 'بحث علمي', 'نشر', 'ورقة بحثية', 'مؤتمر',
             'برمجة', 'كود', 'برنامج', 'تطبيق', 'موقع', 'نظام', 'قاعدة بيانات', 'خوارزمية',
-            'رسم', 'أوتوكاد', 'سوليدوركس', 'ریفيت', 'ديزاين', 'تصميم معماري', 'إنشائي', 'ميكانيكي', 'كهربائي',
+            'رسم', 'أوتوكاد', 'سوليدوركس', 'ريفيت', 'ديزاين', 'تصميم معماري', 'إنشائي', 'ميكانيكي', 'كهربائي',
             'فوتوشوب', 'إليستريتور', 'ان ديزاين', 'جرافيك', 'تصميم جرافيكي', 'شعار', 'logo', 'هوية', 'براند',
             'أحد يساعد', 'أحد يحل', 'أحد يشرح', 'أحد يعمل', 'أحد يسوي', 'أحد يصمم', 'أحد يبرمج', 'أحد يترجم', 'أحد يلخص',
             'help', 'need help', 'urgent', 'assignment help', 'homework help', 'project help'
@@ -165,6 +165,13 @@ def db_delete_account(phone):
     c.execute("DELETE FROM accounts WHERE phone = ?", (phone,))
     conn.commit()
     conn.close()
+    # حذف ملف الجلسة المرتبط
+    session_file = f"session_{phone}.session"
+    if os.path.exists(session_file):
+        try:
+            os.remove(session_file)
+        except:
+            pass
 
 def db_update_account_enabled(phone, enabled):
     conn = get_db()
@@ -197,7 +204,7 @@ def db_log_event(content):
     print(content)
 
 # -------------------------------------------------------------------
-# 3. تخزين مؤقت للجلسات
+# 3. تخزين مؤقت للجلسات (أثناء تسجيل الدخول)
 # -------------------------------------------------------------------
 active_users = {}  # phone -> {client, phone, api_id, api_hash, status, alert_group}
 
@@ -245,8 +252,8 @@ class RadarEngine:
 
     async def _monitor_account(self, acc):
         phone = acc['phone']
-        session_path = f"session_{phone}"
-        client = TelegramClient(session_path, int(acc['api_id']), acc['api_hash'], loop=loop)
+        session_file = f"session_{phone}.session"
+        client = TelegramClient(session_file.replace('.session', ''), int(acc['api_id']), acc['api_hash'], loop=loop)
         try:
             await client.connect()
             # انتظر قليلاً للتأكد من تحميل الجلسة
@@ -259,6 +266,7 @@ class RadarEngine:
                     return
             self.clients[phone] = client
             print(f"✅ حساب {phone} متصل ويرصد")
+
             @client.on(events.NewMessage)
             async def handler(event):
                 if event.is_private or event.out:
@@ -296,6 +304,7 @@ class RadarEngine:
                             db_log_event(f"❌ فشل إرسال من {phone}: {e}")
                     except Exception as e:
                         db_log_event(f"❌ فشل إرسال من {phone}: {e}")
+
             await client.run_until_disconnected()
         except Exception as e:
             print(f"❌ خطأ في حساب {phone}: {e}")
@@ -333,7 +342,9 @@ def login_step1():
     phone = request.form['phone']
     alert_group = request.form.get('alert_group', '')
 
-    client = TelegramClient('temp_session', int(api_id), api_hash, loop=loop)
+    # استخدام نفس اسم الجلسة الذي سيستخدمه الرادار
+    session_name = f"session_{phone}"
+    client = TelegramClient(session_name, int(api_id), api_hash, loop=loop)
     try:
         run_async(client.connect())
         run_async(client.send_code_request(phone))
@@ -375,6 +386,7 @@ def verify_code():
         run_async(client.sign_in(phone=user['phone'], code=code))
         user['status'] = 'logged_in'
         db_add_account(user['phone'], user['api_id'], user['api_hash'], user['alert_group'])
+        # تشغيل الحساب مباشرة في الرادار
         if db_get_setting('radar_status') == '1':
             asyncio.run_coroutine_threadsafe(radar._monitor_account({
                 'phone': user['phone'],
